@@ -1,6 +1,6 @@
 # BÀI TẬP AN TOÀN VÀ BẢO MẬT THÔNG TIN
 
-## Repository lưu trữ nội dung bài tập môn An toàn và Bảo mật Thông tin: hai bài thực hành về mã hoá AES (mã hoá đối xứng) và RSA (mã hoá bất đối xứng), được viết bằng .NET (C#) và thực hiện trên Ubuntu.
+Repository lưu trữ nội dung bài tập môn An toàn và Bảo mật Thông tin: hai bài thực hành về mã hoá AES (mã hoá đối xứng) và RSA (mã hoá bất đối xứng), được viết bằng .NET (C#) và thực hiện trên Ubuntu.
 
 ## Thông tin sinh viên:
 + Họ và tên: Trần Lâm Vũ
@@ -9,8 +9,8 @@
 + Trường: Đại học Kỹ thuật Công nghiệp Thái Nguyên
 
 ## Nội dung
-- Bài tập 1 - Mã hoá AES: sinh khoá, lưu/import khoá, mã hoá văn bản và mã hoá file lớn (hàng GB), đo thời gian và so sánh dữ liệu theo byte
-- Bài tập 2 - Mã hoá RSA: sinh cặp khoá, định dạng PEM, mã hoá dữ liệu ≤ 190 byte, đánh giá tốc độ, băm SHA-256 và chữ ký số RSA-PSS
+- [Bài tập 1](baitap1.md) - Mã hoá AES: sinh khoá, lưu/import khoá, mã hoá văn bản và mã hoá file lớn (hàng GB), đo thời gian và so sánh dữ liệu theo byte
+- [Bài tập 2](baitap2.md) - Mã hoá RSA: sinh cặp khoá, định dạng PEM, mã hoá dữ liệu ≤ 190 byte, đánh giá tốc độ, băm SHA-256 và chữ ký số RSA-PSS
 
 ## Deadline
 23:59 26/10/2026
