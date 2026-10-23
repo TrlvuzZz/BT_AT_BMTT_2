@@ -1,0 +1,230 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Diagnostics;
+using System.Numerics;
+using System.Security.Cryptography;
+using System.Text;
+
+class Program
+{
+    static string PubFile  = "public_key.pem";
+    static string PrivFile = "private_key.pem";
+    static string EncFile  = "encrypted.txt";   // du lieu da ma hoa, luu dang Base64
+
+    static void Main()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n===== BAI 2: MA HOA RSA =====");
+            Console.WriteLine("1. Sinh cap khoa RSA -> xuat file PEM");
+            Console.WriteLine("2. Xem noi dung file PEM");
+            Console.WriteLine("3. Import PEM -> xem cac thanh phan khoa (n, e, d, ...)");
+            Console.WriteLine("4. Ma hoa du lieu (<= 190 byte) -> luu Base64 ra file");
+            Console.WriteLine("5. Giai ma du lieu + so sanh voi ban goc");
+            Console.WriteLine("6. Do toc do ma hoa / giai ma");
+            Console.WriteLine("7. Bam SHA-256 va hieu ung tuyet lo");
+            Console.WriteLine("8. Chu ky so: PKCS#1 v1.5 vs RSA-PSS");
+            Console.WriteLine("0. Thoat");
+            Console.Write("Chon chuc nang: ");
+            switch (Console.ReadLine())
+            {
+                case "1": SinhKhoa(); break;
+                case "2": XemPem(); break;
+                case "3": XemThamSoKhoa(); break;
+                case "4": MaHoa(); break;
+                case "5": GiaiMa(); break;
+                case "6": DoTocDo(); break;
+                case "7": BamSHA256(); break;
+                case "8": ChuKySo(); break;
+                case "0": return;
+                default: Console.WriteLine("Lua chon khong hop le!"); break;
+            }
+        }
+    }
+
+    // ---- 1. Sinh cap khoa RSA-2048, xuat ra file PEM ----
+    static void SinhKhoa()
+    {
+        using (RSA rsa = RSA.Create(2048))
+        {
+            File.WriteAllText(PubFile,  rsa.ExportRSAPublicKeyPem());
+            File.WriteAllText(PrivFile, rsa.ExportRSAPrivateKeyPem());
+            Console.WriteLine("Da sinh cap khoa RSA-2048:");
+            Console.WriteLine("  Public key  -> " + PubFile);
+            Console.WriteLine("  Private key -> " + PrivFile);
+        }
+    }
+
+    // ---- 2. Xem noi dung file PEM ----
+    static void XemPem()
+    {
+        Console.WriteLine("----- Noi dung " + PubFile + " -----");
+        Console.WriteLine(File.ReadAllText(PubFile));
+        Console.WriteLine("----- Noi dung " + PrivFile + " -----");
+        Console.WriteLine(File.ReadAllText(PrivFile));
+    }
+
+    // ---- Import khoa tu file PEM ----
+    static RSA ImportKhoa(bool privateKey)
+    {
+        string file = privateKey ? PrivFile : PubFile;
+        if (!File.Exists(file))
+        {
+            Console.WriteLine("Chua co file PEM, tu dong sinh khoa moi...");
+            SinhKhoa();
+        }
+        RSA rsa = RSA.Create();
+        rsa.ImportFromPem(File.ReadAllText(file));
+        return rsa;
+    }
+
+    static string RutGon(byte[] b, int n = 32)
+    {
+        string hex = Convert.ToHexString(b);
+        return hex.Length <= n * 2 ? hex : hex.Substring(0, n * 2) + "...";
+    }
+
+    // ---- 3. Trich xuat cac thanh phan cua khoa tu PEM ----
+    static void XemThamSoKhoa()
+    {
+        using (RSA pub = ImportKhoa(false))
+        {
+            RSAParameters p = pub.ExportParameters(false);
+            var e = new BigInteger(p.Exponent, isUnsigned: true, isBigEndian: true);
+            Console.WriteLine("== PUBLIC KEY ==");
+            Console.WriteLine($"n (Modulus) : {p.Modulus.Length * 8} bit, hex = {RutGon(p.Modulus)}");
+            Console.WriteLine($"e (Exponent): {e}  (hex = {Convert.ToHexString(p.Exponent)})");
+        }
+        using (RSA priv = ImportKhoa(true))
+        {
+            RSAParameters p = priv.ExportParameters(true);
+            Console.WriteLine("== PRIVATE KEY ==");
+            Console.WriteLine($"n  (Modulus)        : {p.Modulus.Length * 8} bit, hex = {RutGon(p.Modulus)}");
+            Console.WriteLine($"e  (PublicExponent) : {new BigInteger(p.Exponent, isUnsigned: true, isBigEndian: true)}");
+            Console.WriteLine($"d  (PrivateExponent): {p.D.Length * 8} bit, hex = {RutGon(p.D)}");
+            Console.WriteLine($"p  (Prime 1)        : {p.P.Length * 8} bit, hex = {RutGon(p.P)}");
+            Console.WriteLine($"q  (Prime 2)        : {p.Q.Length * 8} bit, hex = {RutGon(p.Q)}");
+            Console.WriteLine($"dP (d mod p-1)      : {p.DP.Length * 8} bit, hex = {RutGon(p.DP)}");
+            Console.WriteLine($"dQ (d mod q-1)      : {p.DQ.Length * 8} bit, hex = {RutGon(p.DQ)}");
+            Console.WriteLine($"qInv (q^-1 mod p)   : {p.InverseQ.Length * 8} bit, hex = {RutGon(p.InverseQ)}");
+        }
+    }
+
+    // ---- 4. Ma hoa du lieu <= 190 byte bang public key, luu Base64 ----
+    static void MaHoa()
+    {
+        using (RSA pub = ImportKhoa(false))
+        {
+            Console.Write("Nhap du lieu can ma hoa (vd: khoa AES dang Base64 cua Bai 1): ");
+            string text = Console.ReadLine();
+            byte[] data = Encoding.UTF8.GetBytes(text);
+            // RSA-2048 + OAEP-SHA256: toi da 256 - 2*32 - 2 = 190 byte
+            if (data.Length > 190)
+            {
+                Console.WriteLine($"Du lieu dai {data.Length} byte > 190 byte, RSA khong ma hoa truc tiep duoc!");
+                return;
+            }
+            byte[] cipher = pub.Encrypt(data, RSAEncryptionPadding.OaepSHA256);
+            string b64 = Convert.ToBase64String(cipher);
+            File.WriteAllText(EncFile, b64);
+            Console.WriteLine($"Da ma hoa {data.Length} byte -> {cipher.Length} byte, luu Base64 vao {EncFile}:");
+            Console.WriteLine(b64);
+        }
+    }
+
+    // ---- 5. Giai ma bang private key, so sanh voi du lieu goc ----
+    static void GiaiMa()
+    {
+        using (RSA priv = ImportKhoa(true))
+        {
+            string b64 = File.ReadAllText(EncFile).Trim();
+            byte[] cipher = Convert.FromBase64String(b64);
+            byte[] plain = priv.Decrypt(cipher, RSAEncryptionPadding.OaepSHA256);
+            string text = Encoding.UTF8.GetString(plain);
+            Console.WriteLine("Du lieu giai ma duoc: " + text);
+            Console.Write("Nhap lai du lieu goc de so sanh: ");
+            string goc = Console.ReadLine();
+            Console.WriteLine(Encoding.UTF8.GetBytes(goc).SequenceEqual(plain)
+                ? "=> GIONG HET du lieu goc"
+                : "=> KHAC du lieu goc");
+        }
+    }
+
+    // ---- 6. Do toc do: ma hoa (public key) vs giai ma (private key) ----
+    static void DoTocDo()
+    {
+        using (RSA pub = ImportKhoa(false))
+        using (RSA priv = ImportKhoa(true))
+        {
+            byte[] data = RandomNumberGenerator.GetBytes(32); // gia lap 1 khoa AES 32 byte
+            byte[] cipher = pub.Encrypt(data, RSAEncryptionPadding.OaepSHA256);
+            int N = 1000;
+
+            var sw = Stopwatch.StartNew();
+            for (int i = 0; i < N; i++) pub.Encrypt(data, RSAEncryptionPadding.OaepSHA256);
+            sw.Stop();
+            double encMs = (double)sw.ElapsedMilliseconds / N;
+
+            sw.Restart();
+            for (int i = 0; i < N; i++) priv.Decrypt(cipher, RSAEncryptionPadding.OaepSHA256);
+            sw.Stop();
+            double decMs = (double)sw.ElapsedMilliseconds / N;
+
+            Console.WriteLine($"Ma hoa bang PUBLIC key : {encMs:F4} ms/lan ({N} lan)");
+            Console.WriteLine($"Giai ma bang PRIVATE key: {decMs:F4} ms/lan ({N} lan)");
+            Console.WriteLine($"=> Giai ma cham hon ma hoa khoang {decMs / encMs:F1} lan");
+        }
+    }
+
+    // ---- 7. Bam SHA-256: thay doi rat it dau vao -> bam thay doi the nao? ----
+    static void BamSHA256()
+    {
+        Console.Write("Nhap chuoi 1: ");
+        string s1 = Console.ReadLine();
+        Console.Write("Nhap chuoi 2 (chi sua dung 1 ky tu so voi chuoi 1): ");
+        string s2 = Console.ReadLine();
+
+        byte[] h1 = SHA256.HashData(Encoding.UTF8.GetBytes(s1));
+        byte[] h2 = SHA256.HashData(Encoding.UTF8.GetBytes(s2));
+        string hex1 = Convert.ToHexString(h1), hex2 = Convert.ToHexString(h2);
+        Console.WriteLine("SHA-256 chuoi 1: " + hex1);
+        Console.WriteLine("SHA-256 chuoi 2: " + hex2);
+
+        int khacHex = 0;
+        for (int i = 0; i < hex1.Length; i++) if (hex1[i] != hex2[i]) khacHex++;
+        int khacBit = 0;
+        for (int i = 0; i < h1.Length; i++)
+            khacBit += BitOperations.PopCount((uint)(h1[i] ^ h2[i]));
+
+        Console.WriteLine($"So ky tu hex khac nhau: {khacHex}/64 ({khacHex * 100.0 / 64:F1}%)");
+        Console.WriteLine($"So bit khac nhau      : {khacBit}/256 ({khacBit * 100.0 / 256:F1}%)");
+    }
+
+    // ---- 8. Chu ky so: PKCS#1 v1.5 (xac dinh) vs RSA-PSS (ngau nhien) ----
+    static void ChuKySo()
+    {
+        using (RSA priv = ImportKhoa(true))
+        using (RSA pub = ImportKhoa(false))
+        {
+            Console.Write("Nhap du lieu can ky: ");
+            byte[] data = Encoding.UTF8.GetBytes(Console.ReadLine());
+
+            byte[] sigA1 = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            byte[] sigA2 = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            Console.WriteLine("PKCS#1 v1.5 - 2 lan ky cua cung 1 du lieu GIONG nhau? "
+                + sigA1.SequenceEqual(sigA2));
+
+            byte[] sigB1 = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+            byte[] sigB2 = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+            Console.WriteLine("RSA-PSS     - 2 lan ky cua cung 1 du lieu GIONG nhau? "
+                + sigB1.SequenceEqual(sigB2));
+            Console.WriteLine("RSA-PSS chu ky 1 (Base64): " + Convert.ToBase64String(sigB1));
+            Console.WriteLine("RSA-PSS chu ky 2 (Base64): " + Convert.ToBase64String(sigB2));
+
+            bool ok1 = pub.VerifyData(data, sigB1, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+            bool ok2 = pub.VerifyData(data, sigB2, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+            Console.WriteLine($"Xac minh chu ky 1: {ok1} | Xac minh chu ky 2: {ok2}");
+        }
+    }
+}
