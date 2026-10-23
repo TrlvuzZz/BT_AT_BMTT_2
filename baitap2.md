@@ -81,6 +81,7 @@ RSA-PSS: ký 2 lần cho chữ ký khác nhau, vì mỗi lần ký PSS trộn th
 byte[] sig = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
 bool ok = pub.VerifyData(data, sig, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
 ```
+
 Kết luận: để đáp ứng yêu cầu "cùng dữ liệu, cùng người ký, chữ ký khác nhau mỗi lần", phải dùng RSA-PSS thay cho PKCS#1 v1.5.
 ![Chữ ký số PKCS#1 v1.5 và RSA-PSS](../images/baitap2/rsa-chu-ky-so.png)
 ---
