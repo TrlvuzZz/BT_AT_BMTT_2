@@ -69,7 +69,9 @@ using (CryptoStream cs = new CryptoStream(fsOut, aes.CreateEncryptor(), CryptoSt
     fsIn.CopyTo(cs);
 }
 ```
+
 Kết quả thực tế với file `test.txt` (23 byte): mã hoá ra file `test.enc` có kích thước 32 byte trong 14 ms (lớn hơn file gốc 9 byte do padding PKCS7 bổ sung cho đủ block 16 byte); giải mã `test.enc` ra file `done.txt` thu lại đúng 23 byte trong 2 ms.
+
 ![Mã hoá file bằng AES](images/baitap1/aes-ma-hoa-file.png)
 ---
 
